@@ -59,13 +59,38 @@ const generateModuleStructure = (topic: string, videoCount: number) => {
   ];
 };
 
+// Define types for better TypeScript support
+interface Video {
+  id: string;
+  title: string;
+  creator: string;
+  description?: string;
+  duration?: string;
+  [key: string]: any;
+}
+
+interface ModuleStructure {
+  title: string;
+  description: string;
+  order_index: number;
+}
+
+interface ModuleWithVideos extends ModuleStructure {
+  videos: Video[];
+}
+
 // Categorize videos by learning level using keyword analysis
-const categorizeVideosByLevel = (videos: any[]) => {
-  const categorized = {
-    beginner: [] as any[],
-    intermediate: [] as any[],
-    advanced: [] as any[],
-    practical: [] as any[]
+const categorizeVideosByLevel = (videos: Video[]) => {
+  const categorized: {
+    beginner: Video[];
+    intermediate: Video[];
+    advanced: Video[];
+    practical: Video[];
+  } = {
+    beginner: [],
+    intermediate: [],
+    advanced: [],
+    practical: []
   };
   
   videos.forEach(video => {
@@ -111,9 +136,9 @@ const categorizeVideosByLevel = (videos: any[]) => {
 };
 
 // Distribute videos intelligently across modules
-const distributeVideosIntelligently = (videos: any[], modules: any[]) => {
+const distributeVideosIntelligently = (videos: Video[], modules: ModuleStructure[]): ModuleWithVideos[] => {
   const categorized = categorizeVideosByLevel(videos);
-  const distribution = [];
+  const distribution: ModuleWithVideos[] = [];
   
   if (modules.length === 2) {
     // Simple structure: Basics + Application
@@ -279,12 +304,12 @@ serve(async (req) => {
 
     // Distribute videos intelligently across modules
     const moduleDistribution = distributeVideosIntelligently(videos, moduleStructure);
-    const videoInserts = [];
+    const videoInserts: any[] = [];
 
     moduleDistribution.forEach((moduleData, moduleIndex) => {
       const targetModule = createdModules[moduleIndex];
       
-      moduleData.videos.forEach((video: any, videoIndex: number) => {
+      moduleData.videos.forEach((video: Video, videoIndex: number) => {
         videoInserts.push({
           module_id: targetModule.id,
           youtube_video_id: video.id,
