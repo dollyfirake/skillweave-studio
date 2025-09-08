@@ -15,100 +15,224 @@ import {
   BookOpen,
   StickyNote,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Loader2
 } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 
 const VideoView = () => {
   const { courseId, videoId } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { user, loading: authLoading } = useAuth();
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(0);
   const [notes, setNotes] = useState("");
   const [isCompleted, setIsCompleted] = useState(false);
+  const [video, setVideo] = useState<any>(null);
+  const [course, setCourse] = useState<any>(null);
+  const [module, setModule] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [allVideos, setAllVideos] = useState<any[]>([]);
+  const [currentVideoIndex, setCurrentVideoIndex] = useState(0);
 
-  // Mock video data
-  const mockVideo = {
-    id: 1,
-    title: "What is React?",
-    description: "Learn the fundamentals of React, including what it is, why it's useful, and how it compares to other JavaScript frameworks. This video covers the core concepts you need to understand before diving deeper into React development.",
-    creator: "Tech with Tim",
-    duration: "15:32",
-    youtubeId: "dQw4w9WgXcQ", // Mock YouTube ID
-    completed: false,
-    moduleTitle: "Getting Started with React",
-    courseTitle: "React Development Fundamentals",
-    videoIndex: 1,
-    totalVideos: 12,
+  useEffect(() => {
+    if (!authLoading && !user) {
+      navigate("/login");
+    }
+  }, [user, authLoading, navigate]);
+
+  useEffect(() => {
+    if (videoId && courseId && user) {
+      fetchVideoData();
+    }
+  }, [videoId, courseId, user]);
+
+  const fetchVideoData = async () => {
+    try {
+      setLoading(true);
+
+      // Fetch video details with module and course info
+      const { data: videoData, error: videoError } = await supabase
+        .from('videos')
+        .select(`
+          *,
+          modules (
+            *,
+            courses (*)
+          )
+        `)
+        .eq('id', videoId)
+        .single();
+
+      if (videoError) throw videoError;
+      
+      setVideo(videoData);
+      setModule(videoData.modules);
+      setCourse(videoData.modules.courses);
+
+      // Fetch all videos in the course for navigation
+      const { data: allModules, error: modulesError } = await supabase
+        .from('modules')
+        .select(`
+          *,
+          videos (*)
+        `)
+        .eq('course_id', courseId)
+        .order('order_index');
+
+      if (modulesError) throw modulesError;
+
+      const videos = allModules.flatMap(m => 
+        m.videos.map(v => ({ ...v, moduleTitle: m.title }))
+      ).sort((a, b) => a.order_index - b.order_index);
+      
+      setAllVideos(videos);
+      setCurrentVideoIndex(videos.findIndex(v => v.id === videoId));
+
+      // Fetch user progress for this video
+      const { data: progressData } = await supabase
+        .from('user_progress')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('video_id', videoId)
+        .single();
+
+      if (progressData) {
+        setIsCompleted(progressData.completed);
+      }
+
+      // Fetch user notes for this video
+      const { data: notesData } = await supabase
+        .from('notes')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('video_id', videoId)
+        .single();
+
+      if (notesData) {
+        setNotes(notesData.content);
+      }
+
+    } catch (error: any) {
+      console.error('Error fetching video data:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load video data",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
-  // Mock course navigation
-  const prevVideo = { id: null, title: null };
-  const nextVideo = { id: 2, title: "Setting up Your Development Environment" };
+  const handleMarkComplete = async () => {
+    try {
+      const { error } = await supabase
+        .from('user_progress')
+        .upsert({
+          user_id: user.id,
+          video_id: videoId,
+          completed: true,
+          completion_date: new Date().toISOString()
+        });
 
-  useEffect(() => {
-    // Simulate video progress tracking
-    const interval = setInterval(() => {
-      if (isPlaying && progress < 100) {
-        setProgress(prev => Math.min(prev + 1, 100));
-      }
-    }, 1000);
+      if (error) throw error;
 
-    return () => clearInterval(interval);
-  }, [isPlaying, progress]);
-
-  useEffect(() => {
-    // Mark as completed when video reaches 90%
-    if (progress >= 90 && !isCompleted) {
       setIsCompleted(true);
+      setProgress(100);
       toast({
         title: "Video Completed!",
-        description: "Great job! You've completed this video.",
+        description: "Great job! Moving to next video...",
+      });
+      
+      // Auto-navigate to next video after 2 seconds
+      setTimeout(() => {
+        const nextVideoIndex = currentVideoIndex + 1;
+        if (nextVideoIndex < allVideos.length) {
+          const nextVideo = allVideos[nextVideoIndex];
+          navigate(`/course/${courseId}/video/${nextVideo.id}`);
+        }
+      }, 2000);
+    } catch (error: any) {
+      console.error('Error marking video complete:', error);
+      toast({
+        title: "Error",
+        description: "Failed to mark video as complete",
+        variant: "destructive",
       });
     }
-  }, [progress, isCompleted, toast]);
-
-  const handlePlayPause = () => {
-    setIsPlaying(!isPlaying);
   };
 
-  const handleMarkComplete = () => {
-    setIsCompleted(true);
-    setProgress(100);
-    toast({
-      title: "Video Marked Complete",
-      description: "Moving to next video...",
-    });
-    
-    // Auto-navigate to next video after 2 seconds
-    setTimeout(() => {
-      if (nextVideo.id) {
-        navigate(`/course/${courseId}/video/${nextVideo.id}`);
-      }
-    }, 2000);
-  };
+  const handleSaveNotes = async () => {
+    try {
+      const { error } = await supabase
+        .from('notes')
+        .upsert({
+          user_id: user.id,
+          video_id: videoId,
+          content: notes
+        });
 
-  const handleSaveNotes = () => {
-    // Mock save notes
-    toast({
-      title: "Notes Saved",
-      description: "Your notes have been saved successfully.",
-    });
+      if (error) throw error;
+
+      toast({
+        title: "Notes Saved",
+        description: "Your notes have been saved successfully.",
+      });
+    } catch (error: any) {
+      console.error('Error saving notes:', error);
+      toast({
+        title: "Error",
+        description: "Failed to save notes",
+        variant: "destructive",
+      });
+    }
   };
 
   const handlePrevVideo = () => {
-    if (prevVideo.id) {
+    const prevVideoIndex = currentVideoIndex - 1;
+    if (prevVideoIndex >= 0) {
+      const prevVideo = allVideos[prevVideoIndex];
       navigate(`/course/${courseId}/video/${prevVideo.id}`);
     }
   };
 
   const handleNextVideo = () => {
-    if (nextVideo.id) {
+    const nextVideoIndex = currentVideoIndex + 1;
+    if (nextVideoIndex < allVideos.length) {
+      const nextVideo = allVideos[nextVideoIndex];
       navigate(`/course/${courseId}/video/${nextVideo.id}`);
     }
   };
+
+  if (authLoading || loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
+
+  if (!video || !course) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Navbar />
+        <div className="container mx-auto px-4 py-8">
+          <div className="text-center">
+            <h1 className="text-2xl font-bold text-jewel mb-4">Video Not Found</h1>
+            <Button onClick={() => navigate(`/course/${courseId}`)}>Back to Course</Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const prevVideo = currentVideoIndex > 0 ? allVideos[currentVideoIndex - 1] : null;
+  const nextVideo = currentVideoIndex < allVideos.length - 1 ? allVideos[currentVideoIndex + 1] : null;
 
   return (
     <div className="min-h-screen bg-background">
@@ -129,67 +253,29 @@ const VideoView = () => {
               onClick={() => navigate(`/course/${courseId}`)}
               className="hover:text-jewel transition-colors"
             >
-              {mockVideo.courseTitle}
+              {course.topic_name}
             </button>
             <span>/</span>
-            <span className="text-foreground">{mockVideo.title}</span>
+            <span className="text-foreground">{video.title}</span>
           </nav>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
           {/* Video Player and Content */}
           <div className="lg:col-span-3 space-y-6">
-            {/* Video Player */}
+            {/* YouTube Video Player */}
             <Card>
               <div className="aspect-video bg-black rounded-t-lg relative overflow-hidden">
-                {/* Mock YouTube Player */}
-                <div className="w-full h-full bg-gradient-to-br from-gray-800 to-gray-900 flex items-center justify-center">
-                  <div className="text-center text-white">
-                    <div className="text-6xl mb-4">📺</div>
-                    <p className="text-lg mb-4">YouTube Video Player</p>
-                    <p className="text-sm text-gray-300">Video ID: {mockVideo.youtubeId}</p>
-                  </div>
-                  
-                  {/* Play/Pause Overlay */}
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-                    <Button 
-                      size="lg" 
-                      variant="ghost" 
-                      onClick={handlePlayPause}
-                      className="text-white hover:bg-white/20"
-                    >
-                      {isPlaying ? <Pause className="h-12 w-12" /> : <Play className="h-12 w-12" />}
-                    </Button>
-                  </div>
-                </div>
-                
-                {/* Video Controls */}
-                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4">
-                  <div className="space-y-2">
-                    <Progress value={progress} className="h-2" />
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Button size="sm" variant="ghost" className="text-white hover:bg-white/20">
-                          <SkipBack className="h-4 w-4" />
-                        </Button>
-                        <Button 
-                          size="sm" 
-                          variant="ghost" 
-                          onClick={handlePlayPause}
-                          className="text-white hover:bg-white/20"
-                        >
-                          {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-                        </Button>
-                        <Button size="sm" variant="ghost" className="text-white hover:bg-white/20">
-                          <SkipForward className="h-4 w-4" />
-                        </Button>
-                      </div>
-                      <div className="text-white text-sm">
-                        {Math.floor(progress * 15.32 / 100)}:32 / {mockVideo.duration}
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                <iframe
+                  width="100%"
+                  height="100%"
+                  src={`https://www.youtube.com/embed/${video.youtube_video_id}?autoplay=0&rel=0&modestbranding=1`}
+                  title={video.title}
+                  frameBorder="0"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                  className="w-full h-full"
+                />
               </div>
             </Card>
 
@@ -198,7 +284,7 @@ const VideoView = () => {
               <div className="flex items-start justify-between">
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-2">
-                    <Badge variant="secondary">{mockVideo.moduleTitle}</Badge>
+                    <Badge variant="secondary">{module.title}</Badge>
                     {isCompleted && (
                       <Badge variant="default" className="bg-green-500">
                         <CheckCircle className="h-3 w-3 mr-1" />
@@ -206,15 +292,13 @@ const VideoView = () => {
                       </Badge>
                     )}
                   </div>
-                  <h1 className="text-2xl font-bold text-jewel mb-2">{mockVideo.title}</h1>
+                  <h1 className="text-2xl font-bold text-jewel mb-2">{video.title}</h1>
                   <div className="flex items-center gap-4 text-sm text-muted-foreground mb-4">
-                    <span>By {mockVideo.creator}</span>
-                    <div className="flex items-center gap-1">
-                      <Clock className="h-4 w-4" />
-                      <span>{mockVideo.duration}</span>
-                    </div>
+                    <span>By {video.creator_name}</span>
                   </div>
-                  <p className="text-muted-foreground">{mockVideo.description}</p>
+                  <p className="text-muted-foreground">
+                    Learn about {course.topic_name} through this carefully curated video content.
+                  </p>
                 </div>
                 
                 {!isCompleted && (
@@ -229,7 +313,7 @@ const VideoView = () => {
               <div className="flex items-center justify-between pt-4 border-t">
                 <Button 
                   variant="outline" 
-                  disabled={!prevVideo.id}
+                  disabled={!prevVideo}
                   onClick={handlePrevVideo}
                 >
                   <ChevronLeft className="h-4 w-4 mr-2" />
@@ -237,12 +321,12 @@ const VideoView = () => {
                 </Button>
                 
                 <span className="text-sm text-muted-foreground">
-                  Video {mockVideo.videoIndex} of {mockVideo.totalVideos}
+                  Video {currentVideoIndex + 1} of {allVideos.length}
                 </span>
                 
                 <Button 
                   variant="outline" 
-                  disabled={!nextVideo.id}
+                  disabled={!nextVideo}
                   onClick={handleNextVideo}
                 >
                   Next
