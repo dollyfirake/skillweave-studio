@@ -57,6 +57,12 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
+        jewel: {
+          DEFAULT: "hsl(var(--jewel))",
+          light: "hsl(var(--jewel-light))",
+          lighter: "hsl(var(--jewel-lighter))",
+          bg: "hsl(var(--jewel-bg))",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",
