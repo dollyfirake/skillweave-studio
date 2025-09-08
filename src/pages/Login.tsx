@@ -1,34 +1,84 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
 
 const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [isSignUp, setIsSignUp] = useState(false);
+  const [loading, setLoading] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
+  const { user, signIn, signUp, signInWithGoogle } = useAuth();
 
-  const handleLogin = (e: React.FormEvent) => {
+  useEffect(() => {
+    if (user) {
+      navigate("/dashboard");
+    }
+  }, [user, navigate]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Mock login - in Phase 2 this will use Supabase auth
-    toast({
-      title: "Login Successful",
-      description: "Welcome to LearnFlow!",
-    });
-    navigate("/dashboard");
+    setLoading(true);
+
+    try {
+      const { error } = isSignUp 
+        ? await signUp(email, password)
+        : await signIn(email, password);
+
+      if (error) {
+        toast({
+          title: "Error",
+          description: error.message,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: isSignUp ? "Account Created" : "Login Successful",
+          description: isSignUp 
+            ? "Please check your email to verify your account" 
+            : "Welcome to LearnFlow!",
+        });
+        if (!isSignUp) {
+          navigate("/dashboard");
+        }
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleGoogleLogin = () => {
-    // Mock Google OAuth - in Phase 2 this will use real Google OAuth
-    toast({
-      title: "Google Login",
-      description: "Logging in with Google...",
-    });
-    navigate("/dashboard");
+  const handleGoogleLogin = async () => {
+    setLoading(true);
+    try {
+      const { error } = await signInWithGoogle();
+      if (error) {
+        toast({
+          title: "Error",
+          description: error.message,
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to sign in with Google",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -38,11 +88,18 @@ const Login = () => {
           <div className="mx-auto mb-4 w-16 h-16 bg-gradient-to-br from-jewel to-jewel-light rounded-full flex items-center justify-center">
             <span className="text-2xl font-bold text-white">LF</span>
           </div>
-          <CardTitle className="text-2xl font-bold text-jewel">Welcome to LearnFlow</CardTitle>
-          <CardDescription>Master new topics through curated video journeys</CardDescription>
+          <CardTitle className="text-2xl font-bold text-jewel">
+            {isSignUp ? "Join LearnFlow" : "Welcome to LearnFlow"}
+          </CardTitle>
+          <CardDescription>
+            {isSignUp 
+              ? "Create your account to start learning" 
+              : "Master new topics through curated video journeys"
+            }
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <form onSubmit={handleLogin} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input
@@ -65,8 +122,12 @@ const Login = () => {
                 required
               />
             </div>
-            <Button type="submit" className="w-full bg-jewel hover:bg-jewel-light">
-              Sign In
+            <Button 
+              type="submit" 
+              className="w-full bg-jewel hover:bg-jewel-light"
+              disabled={loading}
+            >
+              {loading ? "Please wait..." : (isSignUp ? "Create Account" : "Sign In")}
             </Button>
           </form>
           
@@ -79,7 +140,12 @@ const Login = () => {
             </div>
           </div>
           
-          <Button variant="outline" onClick={handleGoogleLogin} className="w-full">
+          <Button 
+            variant="outline" 
+            onClick={handleGoogleLogin} 
+            className="w-full"
+            disabled={loading}
+          >
             <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
               <path
                 d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -102,8 +168,17 @@ const Login = () => {
           </Button>
           
           <div className="text-center text-sm">
-            <span className="text-muted-foreground">Don't have an account? </span>
-            <Button variant="link" className="p-0 text-jewel">Sign up</Button>
+            <span className="text-muted-foreground">
+              {isSignUp ? "Already have an account? " : "Don't have an account? "}
+            </span>
+            <Button 
+              variant="link" 
+              className="p-0 text-jewel"
+              onClick={() => setIsSignUp(!isSignUp)}
+              disabled={loading}
+            >
+              {isSignUp ? "Sign in" : "Sign up"}
+            </Button>
           </div>
         </CardContent>
       </Card>
