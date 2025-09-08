@@ -66,7 +66,7 @@ const calculateStringSimilarity = (str1: string, str2: string): number => {
 
 // Simple Levenshtein distance implementation
 const levenshteinDistance = (str1: string, str2: string): number => {
-  const matrix = [];
+  const matrix: number[][] = [];
   
   for (let i = 0; i <= str2.length; i++) {
     matrix[i] = [i];
@@ -233,8 +233,8 @@ serve(async (req) => {
     const { query, maxResults = 12 } = await req.json();
     console.log('Searching YouTube for:', query);
 
-    const youtubeApiKey = Deno.env.get('YOUTUBE_API_KEY');
-    if (!youtubeApiKey) {
+    const apiKey = (globalThis as any).Deno?.env?.get('YOUTUBE_API_KEY');
+    if (!apiKey) {
       throw new Error('YouTube API key not found');
     }
 
@@ -244,7 +244,7 @@ serve(async (req) => {
 
     // Search with multiple queries
     for (const searchQuery of searchQueries) {
-      const searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&q=${encodeURIComponent(searchQuery)}&maxResults=15&key=${youtubeApiKey}&order=relevance&videoDuration=medium`;
+      const searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&q=${encodeURIComponent(searchQuery)}&maxResults=15&key=${apiKey}&order=relevance&videoDuration=medium`;
       
       const searchResponse = await fetch(searchUrl);
       if (!searchResponse.ok) {
@@ -257,9 +257,9 @@ serve(async (req) => {
       if (searchData.items && searchData.items.length > 0) {
         // Get detailed statistics for videos
         const videoIds = searchData.items.map((item: YouTubeVideo) => item.id.videoId).join(',');
-        const statsUrl = `https://www.googleapis.com/youtube/v3/videos?part=statistics,contentDetails,snippet&id=${videoIds}&key=${youtubeApiKey}`;
+        const detailsUrl = `https://www.googleapis.com/youtube/v3/videos?part=statistics,contentDetails&id=${videoIds}&key=${apiKey}`;
         
-        const statsResponse = await fetch(statsUrl);
+        const statsResponse = await fetch(detailsUrl);
         if (statsResponse.ok) {
           const statsData = await statsResponse.json();
           allVideos.push(...(statsData.items || []));

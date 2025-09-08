@@ -228,8 +228,8 @@ serve(async (req) => {
     console.log('Creating course for topic:', topic);
 
     // Initialize Supabase client
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY');
+    const supabaseUrl = (globalThis as any).Deno?.env?.get('SUPABASE_URL');
+    const supabaseKey = (globalThis as any).Deno?.env?.get('SUPABASE_ANON_KEY');
     
     if (!supabaseUrl || !supabaseKey) {
       throw new Error('Supabase configuration missing');

@@ -30,41 +30,28 @@ interface UserStats {
 }
 
 // Function to format course names for better UI display
-const formatCourseName = (name: string): string => {
-  // Common typo corrections
+const formatCourseName = (topicName: string): string => {
+  // Simple typo correction and formatting
   const corrections: { [key: string]: string } = {
     'prodct': 'product',
     'mangmet': 'management',
-    'managment': 'management',
     'developmet': 'development',
     'programing': 'programming',
-    'desing': 'design',
-    'anlytics': 'analytics',
     'machne': 'machine',
     'artifical': 'artificial',
-    'inteligence': 'intelligence',
-    'databse': 'database',
-    'javascrpt': 'javascript',
-    'pythn': 'python',
-    'reactjs': 'react js'
+    'inteligence': 'intelligence'
   };
-
-  let formatted = name.toLowerCase().trim();
+  
+  let formatted = topicName.toLowerCase();
   
   // Apply corrections
   Object.keys(corrections).forEach(typo => {
-    formatted = formatted.replace(new RegExp(typo, 'gi'), corrections[typo]);
+    formatted = formatted.replace(new RegExp(typo, 'g'), corrections[typo]);
   });
   
-  // Capitalize each word and handle special cases
-  formatted = formatted
-    .split(' ')
+  // Capitalize each word
+  return formatted.split(' ')
     .map(word => {
-      // Handle special cases
-      if (word === 'js') return 'JS';
-      if (word === 'css') return 'CSS';
-      if (word === 'html') return 'HTML';
-      if (word === 'api') return 'API';
       if (word === 'ui') return 'UI';
       if (word === 'ux') return 'UX';
       if (word === 'seo') return 'SEO';
@@ -75,9 +62,8 @@ const formatCourseName = (name: string): string => {
       return word.charAt(0).toUpperCase() + word.slice(1);
     })
     .join(' ');
-    
-  return formatted;
 };
+
 
 const Dashboard = () => {
   const [searchQuery, setSearchQuery] = useState("");
@@ -108,7 +94,8 @@ const Dashboard = () => {
 
   const fetchCoursesWithProgress = async () => {
     try {
-      // Fetch courses with their videos and user progress
+      console.log('Fetching courses for user:', user?.id);
+      // Fetch courses with their videos and user progress - ONLY for current user
       const { data: coursesData, error: coursesError } = await supabase
         .from('courses')
         .select(`
@@ -116,6 +103,7 @@ const Dashboard = () => {
           topic_name,
           description,
           created_at,
+          created_by,
           modules (
             id,
             videos (
@@ -123,22 +111,31 @@ const Dashboard = () => {
               duration,
               user_progress (
                 completed,
-                completion_date
+                completion_date,
+                user_id
               )
             )
           )
         `)
+        .eq('created_by', user?.id)
         .order('created_at', { ascending: false });
 
-      if (coursesError) throw coursesError;
+      if (coursesError) {
+        console.error('Error fetching courses:', coursesError);
+        throw coursesError;
+      }
+      
+      console.log('Fetched courses data:', coursesData);
 
       // Calculate progress for each course
       const coursesWithProgress: CourseWithProgress[] = (coursesData || []).map(course => {
         const allVideos = course.modules?.flatMap(module => module.videos) || [];
         const totalVideos = allVideos.length;
-        const completedVideos = allVideos.filter(video => 
-          video.user_progress && video.user_progress.length > 0 && video.user_progress[0].completed
-        ).length;
+        const completedVideos = allVideos.filter(video => {
+          const progress = video.user_progress;
+          return progress && progress.length > 0 && 
+                 progress.some((p: any) => p?.completed && p?.user_id === user?.id);
+        }).length;
         
         const progress = totalVideos > 0 ? Math.round((completedVideos / totalVideos) * 100) : 0;
         const hasStarted = completedVideos > 0;
@@ -188,7 +185,7 @@ const Dashboard = () => {
       // Calculate courses completed (100% progress)
       const courseProgress = new Map<string, { completed: number; total: number }>();
       
-      // Get all courses and their video counts
+      // Get all courses and their video counts - ONLY for current user
       const { data: allCoursesData } = await supabase
         .from('courses')
         .select(`
@@ -198,7 +195,8 @@ const Dashboard = () => {
               id
             )
           )
-        `);
+        `)
+        .eq('created_by', user?.id);
 
       (allCoursesData || []).forEach(course => {
         const totalVideos = course.modules?.flatMap(m => m.videos).length || 0;
@@ -283,6 +281,8 @@ const Dashboard = () => {
     
     setLoading(true);
     try {
+      console.log('Starting course creation for:', searchQuery);
+      
       // Search YouTube videos
       const { data: videoData, error: videoError } = await supabase.functions.invoke('search-youtube-videos', {
         body: { 
@@ -291,7 +291,12 @@ const Dashboard = () => {
         }
       });
 
-      if (videoError) throw videoError;
+      if (videoError) {
+        console.error('Video search error:', videoError);
+        throw videoError;
+      }
+      
+      console.log('Video search successful:', videoData);
 
       // Create course with found videos and formatted name
       const { data: courseData, error: courseError } = await supabase.functions.invoke('create-course', {
@@ -301,7 +306,12 @@ const Dashboard = () => {
         }
       });
 
-      if (courseError) throw courseError;
+      if (courseError) {
+        console.error('Course creation error:', courseError);
+        throw courseError;
+      }
+      
+      console.log('Course creation successful:', courseData);
 
       toast({
         title: "Course Created!",
@@ -377,50 +387,55 @@ const Dashboard = () => {
       <div className="container mx-auto px-4 py-8">
         {/* Welcome Section */}
         <div className="mb-8">
-          <h1 className="text-4xl font-bold text-jewel mb-2">
-            Welcome back, {user?.email?.split('@')[0] || 'Learner'}!
-          </h1>
-          <p className="text-muted-foreground text-lg">
-            Continue your learning journey or discover something new
-          </p>
-        </div>
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-8">
+            <div>
+              <h1 className="text-4xl font-bold text-jewel mb-2">LearnFlow</h1>
+              <p className="text-lg text-jewel-light font-medium mb-2">
+                Master skills faster with structured, Pareto-powered learning journeys.
+              </p>
+              <p className="text-muted-foreground">
+                Track your progress and continue your personalized learning experience
+              </p>
+            </div>
+          </div>
 
-        {/* Course Generation Section */}
-        <Card className="mb-8 border-2 border-jewel/20">
-          <CardHeader className="text-center">
-            <CardTitle className="text-2xl text-jewel mb-2">
-              What would you like to learn today?
-            </CardTitle>
-            <CardDescription className="text-lg">
-              Generate a personalized course from the best YouTube content
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSearch} className="relative max-w-2xl mx-auto">
-              <Input
-                type="text"
-                placeholder="e.g., Machine Learning, Web Development, Digital Marketing..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pr-32 h-14 text-lg"
-              />
-              <Button 
-                type="submit" 
-                className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-jewel hover:bg-jewel-light"
-                disabled={loading}
-              >
-                {loading ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Creating...
-                  </>
-                ) : (
-                  "Generate Course"
-                )}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
+          {/* Course Generation Section */}
+          <Card className="mb-8 border-2 border-jewel/20">
+            <CardHeader className="text-center">
+              <CardTitle className="text-2xl text-jewel mb-2">
+                What would you like to learn today?
+              </CardTitle>
+              <CardDescription>
+                Generate a personalized course from the best YouTube content
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleSearch} className="relative max-w-2xl mx-auto">
+                <Input
+                  type="text"
+                  placeholder="e.g., Machine Learning, Web Development, Digital Marketing..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pr-32 h-14 text-lg"
+                />
+                <Button 
+                  type="submit" 
+                  className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-jewel hover:bg-jewel-light"
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Creating...
+                    </>
+                  ) : (
+                    "Generate Course"
+                  )}
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
 
         {/* Stats Section */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">

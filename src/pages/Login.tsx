@@ -88,13 +88,16 @@ const Login = () => {
           <div className="mx-auto mb-4 w-16 h-16 bg-gradient-to-br from-jewel to-jewel-light rounded-full flex items-center justify-center">
             <span className="text-2xl font-bold text-white">LF</span>
           </div>
-          <CardTitle className="text-2xl font-bold text-jewel">
-            {isSignUp ? "Join LearnFlow" : "Welcome to LearnFlow"}
+          <CardTitle className="text-3xl font-bold text-jewel mb-2">
+            LearnFlow
           </CardTitle>
-          <CardDescription>
+          <p className="text-lg text-jewel-light font-medium mb-4">
+            Master skills faster with structured, Pareto-powered learning journeys.
+          </p>
+          <CardDescription className="text-base">
             {isSignUp 
-              ? "Create your account to start learning" 
-              : "Master new topics through curated video journeys"
+              ? "Create your account to start your learning journey" 
+              : "Sign in to continue your personalized learning experience"
             }
           </CardDescription>
         </CardHeader>

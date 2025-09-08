@@ -32,11 +32,31 @@ const VideoView = () => {
   const [progress, setProgress] = useState(0);
   const [notes, setNotes] = useState("");
   const [isCompleted, setIsCompleted] = useState(false);
-  const [video, setVideo] = useState<any>(null);
-  const [course, setCourse] = useState<any>(null);
-  const [module, setModule] = useState<any>(null);
+  const [video, setVideo] = useState<{
+    id: string;
+    title: string;
+    youtube_video_id: string;
+    creator_name: string;
+    order_index: number;
+  } | null>(null);
+  const [course, setCourse] = useState<{
+    id: string;
+    topic_name: string;
+    description: string;
+  } | null>(null);
+  const [module, setModule] = useState<{
+    id: string;
+    title: string;
+    description: string;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
-  const [allVideos, setAllVideos] = useState<any[]>([]);
+  const [allVideos, setAllVideos] = useState<Array<{
+    id: string;
+    title: string;
+    youtube_video_id: string;
+    creator_name: string;
+    order_index: number;
+  }>>([]);
   const [currentVideoIndex, setCurrentVideoIndex] = useState(0);
 
   useEffect(() => {
@@ -117,7 +137,7 @@ const VideoView = () => {
         setNotes(notesData.content);
       }
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error fetching video data:', error);
       toast({
         title: "Error",
@@ -286,7 +306,7 @@ const VideoView = () => {
                   <div className="flex items-center gap-2 mb-2">
                     <Badge variant="secondary">{module.title}</Badge>
                     {isCompleted && (
-                      <Badge variant="default" className="bg-green-500">
+                      <Badge variant="secondary" className="bg-green-500">
                         <CheckCircle className="h-3 w-3 mr-1" />
                         Completed
                       </Badge>
