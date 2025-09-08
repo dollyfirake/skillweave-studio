@@ -1,82 +1,130 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Play, Clock, BookOpen, CheckCircle, Circle, Users } from "lucide-react";
+import { Play, Clock, BookOpen, CheckCircle, Circle, Users, Loader2 } from "lucide-react";
 import Navbar from "@/components/Navbar";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
+import { useToast } from "@/hooks/use-toast";
 
 const CourseOverview = () => {
   const { courseId } = useParams();
   const navigate = useNavigate();
+  const { user, loading: authLoading } = useAuth();
+  const { toast } = useToast();
+  const [course, setCourse] = useState<any>(null);
+  const [modules, setModules] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [progress, setProgress] = useState({ completed: 0, total: 0, percentage: 0 });
 
-  // Mock course data
-  const mockCourse = {
-    id: 1,
-    title: "React Development Fundamentals",
-    description: "Master the basics of React including components, state, props, and modern React patterns. This course is curated from the top-rated YouTube tutorials to give you 80% of the knowledge in 20% of the time.",
-    instructor: "Various Expert Instructors",
-    duration: "4.5 hours",
-    totalVideos: 12,
-    completedVideos: 9,
-    progress: 75,
-    difficulty: "Beginner",
-    thumbnail: "https://images.unsplash.com/photo-1633356122544-f134324a6cee?w=800&h=400&fit=crop",
-    modules: [
-      {
-        id: 1,
-        title: "Getting Started with React",
-        videos: [
-          { id: 1, title: "What is React?", duration: "15:32", completed: true, creator: "Tech with Tim" },
-          { id: 2, title: "Setting up Your Development Environment", duration: "12:45", completed: true, creator: "The Net Ninja" },
-          { id: 3, title: "Your First React Component", duration: "18:20", completed: true, creator: "Academind" },
-        ]
-      },
-      {
-        id: 2,
-        title: "Components and JSX",
-        videos: [
-          { id: 4, title: "Understanding JSX", duration: "22:10", completed: true, creator: "Traversy Media" },
-          { id: 5, title: "Props and Component Communication", duration: "25:15", completed: true, creator: "Dev Ed" },
-          { id: 6, title: "Working with Events", duration: "16:40", completed: true, creator: "Codevolution" },
-        ]
-      },
-      {
-        id: 3,
-        title: "State Management",
-        videos: [
-          { id: 7, title: "useState Hook Deep Dive", duration: "28:30", completed: true, creator: "Ben Awad" },
-          { id: 8, title: "useEffect and Side Effects", duration: "32:15", completed: true, creator: "Web Dev Simplified" },
-          { id: 9, title: "useContext for Global State", duration: "24:45", completed: true, creator: "The Net Ninja" },
-        ]
-      },
-      {
-        id: 4,
-        title: "Advanced Patterns",
-        videos: [
-          { id: 10, title: "Custom Hooks", duration: "19:20", completed: false, creator: "Kent C. Dodds" },
-          { id: 11, title: "Performance Optimization", duration: "26:50", completed: false, creator: "Jack Herrington" },
-          { id: 12, title: "Testing React Components", duration: "21:30", completed: false, creator: "Testing Library" },
-        ]
+  useEffect(() => {
+    if (!authLoading && !user) {
+      navigate("/login");
+    }
+  }, [user, authLoading, navigate]);
+
+  useEffect(() => {
+    if (courseId && user) {
+      fetchCourseData();
+    }
+  }, [courseId, user]);
+
+  const fetchCourseData = async () => {
+    try {
+      setLoading(true);
+      
+      // Fetch course details
+      const { data: courseData, error: courseError } = await supabase
+        .from('courses')
+        .select('*')
+        .eq('id', courseId)
+        .single();
+
+      if (courseError) throw courseError;
+      setCourse(courseData);
+
+      // Fetch modules with videos
+      const { data: modulesData, error: modulesError } = await supabase
+        .from('modules')
+        .select(`
+          *,
+          videos (*)
+        `)
+        .eq('course_id', courseId)
+        .order('order_index');
+
+      if (modulesError) throw modulesError;
+      setModules(modulesData || []);
+
+      // Calculate progress
+      const allVideos = modulesData?.flatMap(module => module.videos) || [];
+      const totalVideos = allVideos.length;
+      
+      if (totalVideos > 0) {
+        // Fetch user progress
+        const { data: progressData } = await supabase
+          .from('user_progress')
+          .select('*')
+          .eq('user_id', user.id)
+          .in('video_id', allVideos.map(v => v.id));
+
+        const completedVideos = progressData?.filter(p => p.completed).length || 0;
+        const percentage = Math.round((completedVideos / totalVideos) * 100);
+        
+        setProgress({
+          completed: completedVideos,
+          total: totalVideos,
+          percentage
+        });
       }
-    ]
+    } catch (error: any) {
+      console.error('Error fetching course data:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load course data",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleVideoClick = (videoId: number) => {
+  const handleVideoClick = (videoId: string) => {
     navigate(`/course/${courseId}/video/${videoId}`);
   };
 
   const handleContinueLearning = () => {
-    // Find the first uncompleted video
-    const firstIncompleteVideo = mockCourse.modules
-      .flatMap(module => module.videos)
-      .find(video => !video.completed);
-    
-    if (firstIncompleteVideo) {
-      navigate(`/course/${courseId}/video/${firstIncompleteVideo.id}`);
+    // Find the first video
+    const firstVideo = modules[0]?.videos?.[0];
+    if (firstVideo) {
+      navigate(`/course/${courseId}/video/${firstVideo.id}`);
     }
   };
+
+  if (authLoading || loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
+
+  if (!course) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Navbar />
+        <div className="container mx-auto px-4 py-8">
+          <div className="text-center">
+            <h1 className="text-2xl font-bold text-jewel mb-4">Course Not Found</h1>
+            <Button onClick={() => navigate("/dashboard")}>Back to Dashboard</Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -87,22 +135,18 @@ const CourseOverview = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
           <div className="lg:col-span-2">
             <div className="mb-6">
-              <Badge variant="secondary" className="mb-2">{mockCourse.difficulty}</Badge>
-              <h1 className="text-3xl font-bold text-jewel mb-4">{mockCourse.title}</h1>
-              <p className="text-lg text-muted-foreground mb-4">{mockCourse.description}</p>
+              <Badge variant="secondary" className="mb-2">Learning Course</Badge>
+              <h1 className="text-3xl font-bold text-jewel mb-4">{course.topic_name}</h1>
+              <p className="text-lg text-muted-foreground mb-4">{course.description}</p>
               
               <div className="flex items-center gap-6 text-sm text-muted-foreground">
                 <div className="flex items-center gap-1">
                   <Users className="h-4 w-4" />
-                  <span>{mockCourse.instructor}</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <Clock className="h-4 w-4" />
-                  <span>{mockCourse.duration}</span>
+                  <span>Curated Content</span>
                 </div>
                 <div className="flex items-center gap-1">
                   <BookOpen className="h-4 w-4" />
-                  <span>{mockCourse.totalVideos} videos</span>
+                  <span>{progress.total} videos</span>
                 </div>
               </div>
             </div>
@@ -111,11 +155,9 @@ const CourseOverview = () => {
           <div className="lg:col-span-1">
             <Card>
               <div className="aspect-video bg-gradient-to-br from-jewel-lighter to-jewel-bg rounded-t-lg relative overflow-hidden">
-                <img 
-                  src={mockCourse.thumbnail} 
-                  alt={mockCourse.title}
-                  className="w-full h-full object-cover"
-                />
+                <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
+                  <BookOpen className="h-16 w-16 text-white" />
+                </div>
                 <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
                   <Button 
                     size="lg" 
@@ -123,7 +165,7 @@ const CourseOverview = () => {
                     onClick={handleContinueLearning}
                   >
                     <Play className="h-5 w-5 mr-2" />
-                    Continue Learning
+                    Start Learning
                   </Button>
                 </div>
               </div>
@@ -132,13 +174,13 @@ const CourseOverview = () => {
                   <div>
                     <div className="flex items-center justify-between text-sm mb-2">
                       <span className="text-muted-foreground">Progress</span>
-                      <span className="font-medium">{mockCourse.progress}%</span>
+                      <span className="font-medium">{progress.percentage}%</span>
                     </div>
-                    <Progress value={mockCourse.progress} className="h-3" />
+                    <Progress value={progress.percentage} className="h-3" />
                   </div>
                   
                   <div className="text-center text-sm text-muted-foreground">
-                    {mockCourse.completedVideos} of {mockCourse.totalVideos} videos completed
+                    {progress.completed} of {progress.total} videos completed
                   </div>
                 </div>
               </CardContent>
@@ -150,33 +192,30 @@ const CourseOverview = () => {
         <div className="space-y-6">
           <h2 className="text-2xl font-bold text-jewel">Course Content</h2>
           
-          {mockCourse.modules.map((module) => (
+          {modules.map((module) => (
             <Card key={module.id}>
               <CardHeader>
                 <CardTitle className="text-lg">{module.title}</CardTitle>
+                <CardDescription>{module.description}</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {module.videos.map((video) => (
+                  {module.videos?.map((video: any) => (
                     <div 
                       key={video.id}
                       className="flex items-center justify-between p-3 rounded-lg border hover:bg-accent/50 cursor-pointer transition-colors"
                       onClick={() => handleVideoClick(video.id)}
                     >
                       <div className="flex items-center gap-3">
-                        {video.completed ? (
-                          <CheckCircle className="h-5 w-5 text-green-500" />
-                        ) : (
-                          <Circle className="h-5 w-5 text-muted-foreground" />
-                        )}
+                        <Circle className="h-5 w-5 text-muted-foreground" />
                         <div>
                           <h4 className="font-medium">{video.title}</h4>
-                          <p className="text-sm text-muted-foreground">{video.creator}</p>
+                          <p className="text-sm text-muted-foreground">{video.creator_name}</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Clock className="h-4 w-4" />
-                        <span>{video.duration}</span>
+                        <Play className="h-4 w-4" />
+                        <span>Video</span>
                       </div>
                     </div>
                   ))}
