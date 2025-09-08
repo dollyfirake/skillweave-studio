@@ -350,11 +350,11 @@ const VideoView = () => {
                 <div className="space-y-3">
                   <div className="flex items-center justify-between text-sm">
                     <span>Overall Progress</span>
-                    <span className="font-medium">75%</span>
+                    <span className="font-medium">{Math.round(((currentVideoIndex + (isCompleted ? 1 : 0)) / allVideos.length) * 100)}%</span>
                   </div>
-                  <Progress value={75} className="h-2" />
+                  <Progress value={Math.round(((currentVideoIndex + (isCompleted ? 1 : 0)) / allVideos.length) * 100)} className="h-2" />
                   <div className="text-sm text-muted-foreground">
-                    9 of 12 videos completed
+                    {currentVideoIndex + (isCompleted ? 1 : 0)} of {allVideos.length} videos completed
                   </div>
                   <Button 
                     variant="outline" 

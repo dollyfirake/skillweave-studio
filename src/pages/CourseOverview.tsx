@@ -19,6 +19,7 @@ const CourseOverview = () => {
   const [modules, setModules] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [progress, setProgress] = useState({ completed: 0, total: 0, percentage: 0 });
+  const [userProgress, setUserProgress] = useState<any[]>([]);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -79,6 +80,7 @@ const CourseOverview = () => {
           total: totalVideos,
           percentage
         });
+        setUserProgress(progressData || []);
       }
     } catch (error: any) {
       console.error('Error fetching course data:', error);
@@ -200,25 +202,32 @@ const CourseOverview = () => {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {module.videos?.map((video: any) => (
-                    <div 
-                      key={video.id}
-                      className="flex items-center justify-between p-3 rounded-lg border hover:bg-accent/50 cursor-pointer transition-colors"
-                      onClick={() => handleVideoClick(video.id)}
-                    >
-                      <div className="flex items-center gap-3">
-                        <Circle className="h-5 w-5 text-muted-foreground" />
-                        <div>
-                          <h4 className="font-medium">{video.title}</h4>
-                          <p className="text-sm text-muted-foreground">{video.creator_name}</p>
+                  {module.videos?.map((video: any) => {
+                    const isVideoCompleted = userProgress.some(p => p.video_id === video.id && p.completed);
+                    return (
+                      <div 
+                        key={video.id}
+                        className="flex items-center justify-between p-3 rounded-lg border hover:bg-accent/50 cursor-pointer transition-colors"
+                        onClick={() => handleVideoClick(video.id)}
+                      >
+                        <div className="flex items-center gap-3">
+                          {isVideoCompleted ? (
+                            <CheckCircle className="h-5 w-5 text-green-500" />
+                          ) : (
+                            <Circle className="h-5 w-5 text-muted-foreground" />
+                          )}
+                          <div>
+                            <h4 className="font-medium">{video.title}</h4>
+                            <p className="text-sm text-muted-foreground">{video.creator_name}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <Play className="h-4 w-4" />
+                          <span>Video</span>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Play className="h-4 w-4" />
-                        <span>Video</span>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </CardContent>
             </Card>

@@ -8,7 +8,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { User, Settings, LogOut, BookOpen, Search } from "lucide-react";
+import { User, Settings, LogOut, BookOpen, Search, StickyNote } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
@@ -51,6 +51,14 @@ const Navbar = () => {
             >
               <BookOpen className="h-4 w-4 mr-2" />
               My Learning
+            </Button>
+            <Button 
+              variant="ghost" 
+              className="text-muted-foreground hover:text-jewel"
+              onClick={() => navigate("/notes")}
+            >
+              <StickyNote className="h-4 w-4 mr-2" />
+              My Notes
             </Button>
             <Button 
               variant="ghost" 
