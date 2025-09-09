@@ -344,34 +344,6 @@ const Dashboard = () => {
     { title: "Learning Goal", value: `${userStats.learningGoal}%`, icon: Target, color: "text-orange-600" },
   ];
 
-  // Mock courses for display
-  const mockCourses = [
-    {
-      id: "mock-1",
-      topic_name: "React Development",
-      description: "Learn modern React with hooks and functional components",
-      progress: 75,
-      totalVideos: 12,
-      completedVideos: 9,
-    },
-    {
-      id: "mock-2", 
-      topic_name: "Python Programming",
-      description: "Master Python fundamentals and advanced concepts",
-      progress: 45,
-      totalVideos: 15,
-      completedVideos: 7,
-    },
-    {
-      id: "mock-3",
-      topic_name: "Web Design",
-      description: "Create beautiful and responsive web designs",
-      progress: 20,
-      totalVideos: 8,
-      completedVideos: 2,
-    },
-  ];
-
   if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -509,39 +481,40 @@ const Dashboard = () => {
                   </div>
                 </CardContent>
               </Card>
-            )) : mockCourses.map((course) => (
-              <Card 
-                key={course.id} 
-                className="cursor-pointer hover:shadow-lg transition-shadow duration-200"
-                onClick={() => navigate(`/course/${course.id}`)}
-              >
-                <div className="aspect-video bg-gradient-to-br from-jewel-lighter to-jewel-bg rounded-t-lg relative overflow-hidden">
-                  <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
-                    <Play className="h-12 w-12 text-white" />
-                  </div>
-                  <div className="absolute top-2 right-2 bg-black/50 text-white text-xs px-2 py-1 rounded">
-                    {course.totalVideos} videos
-                  </div>
+            )) : (
+              <div className="col-span-full text-center py-12">
+                <div className="mx-auto w-24 h-24 rounded-full bg-jewel/10 flex items-center justify-center mb-4">
+                  <BookOpen className="h-12 w-12 text-jewel" />
                 </div>
-                <CardHeader>
-                  <CardTitle className="text-lg">{course.topic_name}</CardTitle>
-                  <CardDescription>{course.description}</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    <div className="flex justify-between text-sm">
-                      <span>{course.completedVideos}/{course.totalVideos} completed</span>
-                      <span>{course.progress}%</span>
-                    </div>
-                    <Progress value={course.progress} className="h-2" />
-                    <div className="flex justify-between items-center">
-                      <Badge variant="secondary">{course.progress}% complete</Badge>
-                      <Button size="sm" variant="outline">Continue</Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                <h3 className="text-lg font-medium text-gray-900 mb-2">No courses yet</h3>
+                <p className="text-gray-500 mb-6">Get started by creating your first course!</p>
+                <div className="max-w-md mx-auto">
+                  <form onSubmit={handleSearch} className="relative">
+                    <Input
+                      type="text"
+                      placeholder="What would you like to learn? (e.g., Machine Learning, Web Development...)"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="pr-32 h-12 text-base"
+                    />
+                    <Button 
+                      type="submit" 
+                      className="absolute right-1 top-1 bg-jewel hover:bg-jewel/90"
+                      disabled={loading}
+                    >
+                      {loading ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Creating...
+                        </>
+                      ) : (
+                        "Create Course"
+                      )}
+                    </Button>
+                  </form>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
