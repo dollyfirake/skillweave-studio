@@ -67,6 +67,9 @@ const VideoView = () => {
 
   useEffect(() => {
     if (videoId && courseId && user) {
+      // Reset completion state when video changes
+      setIsCompleted(false);
+      setProgress(0);
       fetchVideoData();
     }
   }, [videoId, courseId, user]);
