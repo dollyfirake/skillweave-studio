@@ -1,6 +1,13 @@
-import "https://deno.land/x/xhr@0.1.0/mod.ts";
+// @deno-types="https://deno.land/x/types/deno.d.ts"
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.2';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0';
+
+// Initialize Supabase client
+const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
+const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY') || '';
+const supabase = createClient(supabaseUrl, supabaseKey, {
+  auth: { persistSession: false }
+});
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -340,6 +347,32 @@ serve(async (req) => {
     const searchQueries = generateSearchQueries(query);
     const allVideos: VideoWithStats[] = [];
 
+    // Check cache first
+    const cacheKey = `search:${query}`;
+    const { data: cachedResults } = await supabase
+      .from('search_cache')
+      .select('results, expires_at')
+      .eq('query', query)
+      .gt('expires_at', new Date().toISOString())
+      .maybeSingle();
+
+    if (cachedResults) {
+      console.log('Returning cached results for query:', query);
+      return new Response(JSON.stringify({ 
+        videos: cachedResults.results,
+        cached: true 
+      }), { 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      });
+    }
+
+    // Initialize Supabase client
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
+    const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY') || '';
+    const supabase = createClient(supabaseUrl, supabaseKey, {
+      auth: { persistSession: false }
+    });
+
     // Search with multiple queries
     for (const searchQuery of searchQueries) {
       try {
@@ -347,7 +380,20 @@ serve(async (req) => {
         
         const searchResponse = await fetch(searchUrl);
         if (!searchResponse.ok) {
-          console.error(`Search API error for "${searchQuery}":`, await searchResponse.text());
+          const errorText = await searchResponse.text();
+          console.error(`Search API error for "${searchQuery}":`, errorText);
+          
+          // Handle quota exceeded error
+          if (errorText.includes('quotaExceeded')) {
+            return new Response(JSON.stringify({ 
+              error: 'We\'ve reached our YouTube API quota limit. Please try again in a few hours or contact support for assistance.',
+              code: 'QUOTA_EXCEEDED'
+            }), { 
+              status: 429,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+            });
+          }
+          
           continue;
         }
 

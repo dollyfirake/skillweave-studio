@@ -293,7 +293,19 @@ const Dashboard = () => {
 
       if (videoError) {
         console.error('Video search error:', videoError);
+        
+        // Handle quota exceeded error
+        if (videoError.message?.includes('QUOTA_EXCEEDED') || 
+            (videoError.error && videoError.error.code === 'QUOTA_EXCEEDED')) {
+          throw new Error('We\'ve reached our YouTube API quota limit. Please try again in a few hours or contact support.');
+        }
+        
         throw videoError;
+      }
+      
+      // If no videos found in the response
+      if (!videoData?.videos || videoData.videos.length === 0) {
+        throw new Error('No videos found for this topic. Please try a different search term.');
       }
       
       console.log('Video search successful:', videoData);

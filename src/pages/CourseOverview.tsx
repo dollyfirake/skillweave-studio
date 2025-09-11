@@ -202,7 +202,7 @@ const CourseOverview = () => {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {module.videos?.map((video: any) => {
+                  {module.videos?.map((video: any, videoIndex: number) => {
                     const isVideoCompleted = userProgress.some(p => p.video_id === video.id && p.completed);
                     return (
                       <div 
@@ -212,18 +212,17 @@ const CourseOverview = () => {
                       >
                         <div className="flex items-center gap-3">
                           {isVideoCompleted ? (
-                            <CheckCircle className="h-5 w-5 text-green-500" />
+                            <CheckCircle className="h-5 w-5 text-green-500 flex-shrink-0" />
                           ) : (
-                            <Circle className="h-5 w-5 text-muted-foreground" />
+                            <Circle className="h-5 w-5 text-muted-foreground flex-shrink-0" />
                           )}
+                          <span className="text-sm font-mono text-muted-foreground w-6">
+                            {module.order_index + 1}.{videoIndex + 1}
+                          </span>
                           <div>
                             <h4 className="font-medium">{video.title}</h4>
                             <p className="text-sm text-muted-foreground">{video.creator_name}</p>
                           </div>
-                        </div>
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <Play className="h-4 w-4" />
-                          <span>Video</span>
                         </div>
                       </div>
                     );

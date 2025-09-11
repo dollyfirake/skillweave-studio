@@ -140,6 +140,27 @@ const distributeVideosIntelligently = (videos: Video[], modules: ModuleStructure
   const categorized = categorizeVideosByLevel(videos);
   const distribution: ModuleWithVideos[] = [];
   
+  // Add order_index to all videos based on their position in the categorized arrays
+  const addOrderIndices = (videos: Video[], startIndex: number = 1): [Video[], number] => {
+    return [videos.map((video, idx) => ({
+      ...video,
+      order_index: startIndex + idx
+    })), startIndex + videos.length];
+  };
+  
+  // Add order indices to all categorized videos
+  let orderCounter = 1;
+  const [beginnerVideos, nextIndex] = addOrderIndices(categorized.beginner, orderCounter);
+  const [intermediateVideos, nextIndex2] = addOrderIndices(categorized.intermediate, nextIndex);
+  const [advancedVideos, nextIndex3] = addOrderIndices(categorized.advanced, nextIndex2);
+  const [practicalVideos] = addOrderIndices(categorized.practical, nextIndex3);
+  
+  // Update the categorized object with ordered videos
+  categorized.beginner = beginnerVideos;
+  categorized.intermediate = intermediateVideos;
+  categorized.advanced = advancedVideos;
+  categorized.practical = practicalVideos;
+
   if (modules.length === 2) {
     // Simple structure: Basics + Application
     distribution.push({
@@ -315,7 +336,7 @@ serve(async (req) => {
           youtube_video_id: video.id,
           title: video.title,
           creator_name: video.creator,
-          order_index: videoIndex,
+          order_index: video.order_index || videoIndex + 1, // Use the pre-assigned order_index or fallback to videoIndex + 1
           duration: video.duration ? parseDurationToSeconds(video.duration) : null
         });
       });
