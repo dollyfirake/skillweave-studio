@@ -4,17 +4,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 
 const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [isSignUp, setIsSignUp] = useState(false);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
-  const { user, signIn, signUp, signInWithGoogle } = useAuth();
+  const { user, signIn, signInWithGoogle } = useAuth();
 
   useEffect(() => {
     if (user) {
@@ -27,9 +26,7 @@ const Login = () => {
     setLoading(true);
 
     try {
-      const { error } = isSignUp 
-        ? await signUp(email, password)
-        : await signIn(email, password);
+      const { error } = await signIn(email, password);
 
       if (error) {
         toast({
@@ -39,14 +36,10 @@ const Login = () => {
         });
       } else {
         toast({
-          title: isSignUp ? "Account Created" : "Login Successful",
-          description: isSignUp 
-            ? "Please check your email to verify your account" 
-            : "Welcome to LearnFlow!",
+          title: "Login Successful",
+          description: "Welcome back to LearnFlow!",
         });
-        if (!isSignUp) {
-          navigate("/dashboard");
-        }
+        navigate("/dashboard");
       }
     } catch (error) {
       toast({
@@ -69,6 +62,8 @@ const Login = () => {
           description: error.message,
           variant: "destructive",
         });
+      } else {
+        navigate("/dashboard");
       }
     } catch (error) {
       toast({
@@ -89,16 +84,16 @@ const Login = () => {
             <span className="text-2xl font-bold text-white">LF</span>
           </div>
           <CardTitle className="text-3xl font-bold text-jewel mb-2">
-            LearnFlow
+            Welcome Back
           </CardTitle>
           <p className="text-lg text-jewel-light font-medium mb-4">
-            Master skills faster with structured, Pareto-powered learning journeys.
+            Sign in to continue your learning journey
           </p>
           <CardDescription className="text-base">
-            {isSignUp 
-              ? "Create your account to start your learning journey" 
-              : "Sign in to continue your personalized learning experience"
-            }
+            Don't have an account?{" "}
+            <Button variant="link" className="p-0 text-jewel h-auto" asChild>
+              <Link to="/signup">Sign up</Link>
+            </Button>
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -130,7 +125,7 @@ const Login = () => {
               className="w-full bg-jewel hover:bg-jewel-light"
               disabled={loading}
             >
-              {loading ? "Please wait..." : (isSignUp ? "Create Account" : "Sign In")}
+              {loading ? "Signing in..." : "Sign In"}
             </Button>
           </form>
           
@@ -171,16 +166,12 @@ const Login = () => {
           </Button>
           
           <div className="text-center text-sm">
-            <span className="text-muted-foreground">
-              {isSignUp ? "Already have an account? " : "Don't have an account? "}
-            </span>
             <Button 
               variant="link" 
-              className="p-0 text-jewel"
-              onClick={() => setIsSignUp(!isSignUp)}
-              disabled={loading}
+              className="p-0 text-jewel text-sm"
+              asChild
             >
-              {isSignUp ? "Sign in" : "Sign up"}
+              <Link to="/forgot-password">Forgot password?</Link>
             </Button>
           </div>
         </CardContent>

@@ -1,5 +1,23 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import { selectOne } from "@/integrations/supabase/client";
+import { Database } from "@/types/database.types";
+
+// Define a more flexible profile type that matches our actual data structure
+type Profile = {
+  id?: string;
+  user_id?: string;
+  email?: string;
+  first_name?: string | null;
+  last_name?: string | null;
+  avatar_url?: string | null;
+  display_name?: string | null;
+  google_sub?: string | null;
+  created_at?: string;
+  updated_at?: string | null;
+  [key: string]: any; // Allow additional properties
+};
+
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -17,6 +35,20 @@ const Navbar = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { user, signOut } = useAuth();
+  const [profile, setProfile] = useState<Profile | null>(null);
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      if (user) {
+        const profile = await selectOne('profiles', '*', { user_id: user.id });
+        if (profile) {
+          setProfile(profile);
+        }
+      }
+    };
+
+    fetchProfile();
+  }, [user]);
 
   const handleLogout = async () => {
     await signOut();
@@ -60,13 +92,6 @@ const Navbar = () => {
               <StickyNote className="h-4 w-4 mr-2" />
               My Notes
             </Button>
-            <Button 
-              variant="ghost" 
-              className="text-muted-foreground hover:text-jewel"
-            >
-              <Search className="h-4 w-4 mr-2" />
-              Explore
-            </Button>
           </div>
 
           {/* User Menu */}
@@ -84,14 +109,16 @@ const Navbar = () => {
             <DropdownMenuContent className="w-56" align="end" forceMount>
               <div className="flex flex-col space-y-1 p-2">
                 <p className="text-sm font-medium leading-none">
-                  {user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User'}
+                  {profile?.first_name && profile?.last_name 
+                    ? `${profile.first_name} ${profile.last_name}`
+                    : user?.email?.split('@')[0] || 'User'}
                 </p>
                 <p className="text-xs leading-none text-muted-foreground">
                   {user?.email}
                 </p>
               </div>
               <DropdownMenuSeparator />
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate('/profile')}>
                 <User className="mr-2 h-4 w-4" />
                 <span>Profile</span>
               </DropdownMenuItem>
