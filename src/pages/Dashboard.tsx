@@ -387,7 +387,11 @@ const Dashboard = () => {
         <div className="mb-8">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-8">
             <div>
-              <h1 className="text-4xl font-bold text-jewel mb-2">LearnFlow</h1>
+              <div className="flex items-center mb-2">
+                <h1 className="text-4xl font-bold text-jewel">
+                  Welcome{user?.user_metadata?.first_name ? `, ${user.user_metadata.first_name}` : ''}!
+                </h1>
+              </div>
               <p className="text-lg text-jewel-light font-medium mb-2">
                 Master skills faster with structured, Pareto-powered learning journeys.
               </p>
