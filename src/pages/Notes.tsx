@@ -72,17 +72,55 @@ const Notes = () => {
     setEditContent(content);
   };
 
+  // Helper function to render note content consistently
+  const renderNoteContent = (content: any): string => {
+    try {
+      if (!content) return '';
+      
+      // If content is a string, try to parse it as JSON
+      if (typeof content === 'string') {
+        try {
+          const parsed = JSON.parse(content);
+          if (parsed && typeof parsed === 'object') {
+            return parsed.text || JSON.stringify(parsed);
+          }
+          return content;
+        } catch (e) {
+          // If it's not valid JSON, return as is
+          return content;
+        }
+      } 
+      // If content is an object, extract text or stringify
+      else if (typeof content === 'object') {
+        return content.text || JSON.stringify(content);
+      }
+      
+      return String(content);
+    } catch (error) {
+      console.error('Error rendering note content:', error);
+      return 'Error loading note content';
+    }
+  };
+
   const handleSaveNote = async (noteId: string) => {
     try {
+      // Ensure content is properly formatted as a JSONB object
+      const contentToSave = typeof editContent === 'string' 
+        ? { text: editContent.trim() }
+        : editContent;
+        
       const { error } = await supabase
         .from('notes')
-        .update({ content: editContent })
+        .update({ 
+          content: contentToSave,
+          updated_at: new Date().toISOString()
+        })
         .eq('id', noteId);
 
       if (error) throw error;
 
       setNotes(notes.map(note => 
-        note.id === noteId ? { ...note, content: editContent } : note
+        note.id === noteId ? { ...note, content: contentToSave } : note
       ));
       setEditingNote(null);
       setEditContent("");
@@ -237,12 +275,12 @@ const Notes = () => {
                   ) : (
                     <div>
                       <div className="whitespace-pre-wrap text-sm mb-3 bg-accent/50 p-3 rounded-lg">
-                        {note.content || "No content"}
+                        {renderNoteContent(note.content) || "No content"}
                       </div>
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => handleEditNote(note.id, note.content)}
+                        onClick={() => handleEditNote(note.id, renderNoteContent(note.content))}
                       >
                         Edit Note
                       </Button>

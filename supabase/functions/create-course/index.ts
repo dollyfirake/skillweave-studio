@@ -231,6 +231,7 @@ interface Video {
   creator: string;
   description?: string;
   duration?: string;
+  youtube_video_id?: string;
   [key: string]: any;
 }
 
@@ -552,12 +553,15 @@ serve(async (req) => {
       const targetModule = createdModules[moduleIndex];
       
       moduleData.videos.forEach((video: Video, videoIndex: number) => {
+        // Use youtube_video_id if available, otherwise fall back to id
+        const youtubeVideoId = video.youtube_video_id || video.id;
+        
         videoInserts.push({
           module_id: targetModule.id,
-          youtube_video_id: video.id,
+          youtube_video_id: youtubeVideoId,
           title: video.title,
           creator_name: video.creator,
-          order_index: video.order_index || videoIndex + 1, // Use the pre-assigned order_index or fallback to videoIndex + 1
+          order_index: video.order_index || videoIndex + 1,
           duration: video.duration ? parseDurationToSeconds(video.duration) : null
         });
       });

@@ -1,0 +1,15 @@
+[functions.generate-notes]
+  # Timeout in seconds (max 300 for free tier)
+  timeout = 300
+  # Memory in MB (min 128, max 1024 for free tier)
+  memory = 512
+  # Node.js version
+  nodejs_version = 18
+  # Environment variables
+  env_vars = [
+    "SUPABASE_URL",
+    "SUPABASE_ANON_KEY",
+    "HUGGINGFACE_API_KEY"
+  ]
+  # Import maps (for Deno)
+  import_map = "import_map.json"
