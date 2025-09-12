@@ -331,16 +331,80 @@ const removeDuplicates = (videos: (VideoWithStats & { qualityScore: number })[])
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { 
+      status: 200,
+      headers: { 
+        ...corsHeaders,
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Access-Control-Max-Age': '86400' // 24 hours
+      } 
+    });
+  }
+
+  // Only allow POST requests
+  if (req.method !== 'POST') {
+    return new Response(JSON.stringify({ 
+      error: 'Method not allowed. Use POST.',
+      code: 'METHOD_NOT_ALLOWED'
+    }), { 
+      status: 405,
+      headers: { 
+        ...corsHeaders, 
+        'Content-Type': 'application/json',
+        'Allow': 'POST, OPTIONS'
+      } 
+    });
   }
 
   try {
-    const { query, maxResults = 12 } = await req.json();
+    let requestBody;
+    try {
+      requestBody = await req.json();
+    } catch (e) {
+      return new Response(JSON.stringify({ 
+        error: 'Invalid JSON in request body',
+        code: 'INVALID_JSON'
+      }), { 
+        status: 400,
+        headers: { 
+          ...corsHeaders, 
+          'Content-Type': 'application/json'
+        } 
+      });
+    }
+
+    const { query, maxResults = 12 } = requestBody;
+    
+    if (!query || typeof query !== 'string' || query.trim().length === 0) {
+      return new Response(JSON.stringify({ 
+        error: 'Query parameter is required and must be a non-empty string',
+        code: 'INVALID_QUERY'
+      }), { 
+        status: 400,
+        headers: { 
+          ...corsHeaders, 
+          'Content-Type': 'application/json'
+        } 
+      });
+    }
+
     console.log('Searching YouTube for:', query);
 
     const apiKey = (globalThis as any).Deno?.env?.get('YOUTUBE_API_KEY');
     if (!apiKey) {
-      throw new Error('YouTube API key not found');
+      console.error('YouTube API key not found in environment variables');
+      return new Response(JSON.stringify({ 
+        error: 'Server configuration error. Please contact support.',
+        code: 'CONFIGURATION_ERROR',
+        requestId: crypto.randomUUID()
+      }), { 
+        status: 500,
+        headers: { 
+          ...corsHeaders, 
+          'Content-Type': 'application/json',
+          'X-Request-ID': crypto.randomUUID()
+        } 
+      });
     }
 
     // Generate multiple search queries
@@ -384,22 +448,53 @@ serve(async (req) => {
           console.error(`Search API error for "${searchQuery}":`, errorText);
           
           // Handle quota exceeded error
-          if (errorText.includes('quotaExceeded')) {
+          if (errorText.toLowerCase().includes('quota') || errorText.toLowerCase().includes('exceeded') || 
+              errorText.toLowerCase().includes('limit') || errorText.toLowerCase().includes('usage')) {
+            const quotaResetTime = new Date();
+            quotaResetTime.setDate(quotaResetTime.getDate() + 1); // Reset at midnight PT
+            quotaResetTime.setHours(0, 0, 0, 0);
+            
+            const timeUntilReset = Math.ceil((quotaResetTime.getTime() - Date.now()) / 1000);
+            const hoursUntilReset = Math.ceil(timeUntilReset / 3600);
+            
+            console.error('YouTube API quota exceeded. Next reset at:', quotaResetTime.toISOString());
+            
             return new Response(JSON.stringify({ 
-              error: 'We\'ve reached our YouTube API quota limit. Please try again in a few hours or contact support for assistance.',
-              code: 'QUOTA_EXCEEDED'
-            }), { 
+              error: `We've reached our daily limit for video searches.\n\n` +
+                    `Please try again in about ${hoursUntilReset} hours (after midnight PT).\n\n` +
+                    `Our team has been notified and we're working to increase our capacity.`,
+              code: 'QUOTA_EXCEEDED',
+              retryAfter: quotaResetTime.toISOString(),
+              hoursUntilReset,
+              documentation: 'https://developers.google.com/youtube/v3/getting-started#quota',
+              supportContact: 'support@skillweave.com'
+            }, null, 2), { 
               status: 429,
-              headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+              headers: { 
+                ...corsHeaders, 
+                'Content-Type': 'application/json',
+                'Retry-After': timeUntilReset.toString(),
+                'X-RateLimit-Limit': '10000',
+                'X-RateLimit-Remaining': '0',
+                'X-RateLimit-Reset': Math.floor(quotaResetTime.getTime() / 1000).toString(),
+                'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'
+              } 
             });
           }
           
+          // Log other API errors but continue with next query
+          console.warn(`Skipping failed query "${searchQuery}" due to API error`);
           continue;
         }
 
         const searchData = await searchResponse.json();
         
-        if (searchData.items?.length > 0) {
+        if (!searchData.items || !Array.isArray(searchData.items)) {
+          console.warn(`Unexpected response format for query "${searchQuery}"`);
+          continue;
+        }
+        
+        if (searchData.items.length > 0) {
           // Get detailed statistics for videos
           const videoIds = searchData.items
             .filter((item: YouTubeVideo) => item.id?.videoId)
@@ -516,21 +611,87 @@ serve(async (req) => {
           title: video?.snippet?.title,
           error: error.message
         });
-        return null;
+        continue;
       }
-    }).filter(video => video !== null); // Remove any null entries from failed processing
+    }
 
-    return new Response(JSON.stringify({ videos }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
-  } catch (error) {
-    console.error('Error in search-youtube-videos function:', error);
+    const filteredVideos = allVideos.filter(Boolean);
+    
+    if (filteredVideos.length === 0) {
+      return new Response(JSON.stringify({ 
+        videos: [],
+        message: 'No videos found for the given query. Try adjusting your search terms.'
+      }), { 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      });
+    }
+    
+    // Cache the results for 1 hour
+    const expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + 1);
+    
+    await supabase
+                         error.message.toLowerCase().includes('exceeded'))) {
+      return new Response(JSON.stringify({
+        error: `We've reached our daily limit for video searches.\n\n` +
+              `Please try again tomorrow. Our team has been notified.`,
+        code: 'QUOTA_EXCEEDED'
+      }, null, 2), {
+        status: 429,
+        headers: { 
+          ...corsHeaders, 
+          'Content-Type': 'application/json',
+          'Retry-After': '86400', // 24 hours in seconds
+          'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'
+        }
+      });
+    }
+    
+    // Check for network errors
+    if (error.name === 'TypeError' && error.message.includes('fetch')) {
+      return new Response(JSON.stringify({ 
+        error: 'Unable to connect to YouTube services. Please check your internet connection and try again.',
+        code: 'NETWORK_ERROR'
+      }, null, 2), { 
+        status: 503,
+        headers: { 
+          ...corsHeaders, 
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'
+        } 
+      });
+    }
+    
+    // Handle JSON parsing errors
+    if (error instanceof SyntaxError) {
+      return new Response(JSON.stringify({ 
+        error: 'Invalid request data. Please check your input and try again.',
+        code: 'INVALID_REQUEST'
+      }, null, 2), { 
+        status: 400,
+        headers: { 
+          ...corsHeaders, 
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'
+        } 
+      });
+    }
+    
+    // Generic error response
     return new Response(JSON.stringify({ 
-      error: error.message,
-      videos: [] 
-    }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      error: 'An unexpected error occurred while searching for videos.\n\n' +
+            'Our team has been notified and we\'re working to fix this issue.\n' +
+            'Please try again later or contact support if the problem persists.',
+      code: 'INTERNAL_SERVER_ERROR',
+      requestId: crypto.randomUUID()
+    }, null, 2), { 
+      status: 500, 
+      headers: { 
+        ...corsHeaders, 
+        'Content-Type': 'application/json',
+        'X-Request-ID': crypto.randomUUID(),
+        'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'
+      } 
     });
   }
 });

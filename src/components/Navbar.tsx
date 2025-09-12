@@ -60,13 +60,6 @@ const Navbar = () => {
               <StickyNote className="h-4 w-4 mr-2" />
               My Notes
             </Button>
-            <Button 
-              variant="ghost" 
-              className="text-muted-foreground hover:text-jewel"
-            >
-              <Search className="h-4 w-4 mr-2" />
-              Explore
-            </Button>
           </div>
 
           {/* User Menu */}

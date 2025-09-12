@@ -29,36 +29,20 @@ interface UserStats {
   learningGoal: number;
 }
 
-// Function to format course names for better UI display
+// Format course names with proper capitalization
 const formatCourseName = (topicName: string): string => {
-  // Simple typo correction and formatting
-  const corrections: { [key: string]: string } = {
-    'prodct': 'product',
-    'mangmet': 'management',
-    'developmet': 'development',
-    'programing': 'programming',
-    'machne': 'machine',
-    'artifical': 'artificial',
-    'inteligence': 'intelligence'
-  };
-  
-  let formatted = topicName.toLowerCase();
-  
-  // Apply corrections
-  Object.keys(corrections).forEach(typo => {
-    formatted = formatted.replace(new RegExp(typo, 'g'), corrections[typo]);
-  });
-  
-  // Capitalize each word
-  return formatted.split(' ')
+  return topicName
+    .toLowerCase()
+    .split(' ')
     .map(word => {
+      // Handle common acronyms
       if (word === 'ui') return 'UI';
       if (word === 'ux') return 'UX';
       if (word === 'seo') return 'SEO';
       if (word === 'ai') return 'AI';
       if (word === 'ml') return 'ML';
       
-      // Capitalize first letter
+      // Capitalize first letter of each word
       return word.charAt(0).toUpperCase() + word.slice(1);
     })
     .join(' ');
@@ -294,13 +278,29 @@ const Dashboard = () => {
       if (videoError) {
         console.error('Video search error:', videoError);
         
-        // Handle quota exceeded error
-        if (videoError.message?.includes('QUOTA_EXCEEDED') || 
-            (videoError.error && videoError.error.code === 'QUOTA_EXCEEDED')) {
-          throw new Error('We\'ve reached our YouTube API quota limit. Please try again in a few hours or contact support.');
+        // Extract error message from the error object
+        let errorMessage = 'Failed to search for videos. Please try again later.';
+        
+        // Handle different error formats
+        if (videoError.message) {
+          errorMessage = videoError.message;
+        } else if (videoError.error?.message) {
+          errorMessage = videoError.error.message;
+        } else if (videoError.error) {
+          errorMessage = videoError.error;
         }
         
-        throw videoError;
+        // Handle quota exceeded error specifically
+        if (videoError.code === 'QUOTA_EXCEEDED' || 
+            videoError.error?.code === 'QUOTA_EXCEEDED' ||
+            errorMessage.includes('QUOTA_EXCEEDED') ||
+            errorMessage.includes('quota') ||
+            errorMessage.includes('limit')) {
+          errorMessage = 'We\'ve reached our daily limit for video searches. ' +
+                       'Please try again in 24 hours or contact support@skillweave.com for assistance.';
+        }
+        
+        throw new Error(errorMessage);
       }
       
       // If no videos found in the response
@@ -338,10 +338,24 @@ const Dashboard = () => {
       navigate(`/course/${courseData.course.id}`);
     } catch (error: any) {
       console.error('Error creating course:', error);
+      
+      // Format error message for better display
+      let errorMessage = typeof error === 'string' ? error : 
+                        error?.message || 
+                        error?.error?.message || 
+                        'An unexpected error occurred. Please try again later.';
+      
+      // Clean up error message for better display
+      errorMessage = errorMessage
+        .replace(/^Error: /, '') // Remove leading 'Error: ' if present
+        .replace(/\n+/g, ' ')   // Convert newlines to spaces
+        .trim();
+      
       toast({
         title: "Error",
-        description: error.message || "Failed to create course",
+        description: errorMessage,
         variant: "destructive",
+        duration: 5000, // Show for 5 seconds
       });
     } finally {
       setLoading(false);

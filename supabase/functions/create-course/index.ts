@@ -2,6 +2,171 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.2';
 
+// Common corrections for course names - ordered from specific to general
+const CORRECTIONS: Record<string, string> = {
+  // Specific multi-word corrections first
+  'product manager': 'Product Management',
+  'project manager': 'Project Management',
+  'data sci': 'Data Science',
+  'web dev': 'Web Development',
+  'machine learning': 'Machine Learning',
+  'artificial intelligence': 'Artificial Intelligence',
+  'ux/ui': 'UX/UI',
+  'ui/ux': 'UX/UI',  // Standardize on UX/UI
+  'ai/ml': 'AI/ML',
+  'ml/ai': 'AI/ML',  // Standardize on AI/ML
+  
+  // Common typos and abbreviations
+  'analystics': 'Analytics',
+  'cracking': 'Cracking the',
+  'interview': 'Interviews',
+  'pm': 'PM',
+  'ux': 'UX',
+  'ui': 'UI',
+  'ai': 'AI',
+  'ml': 'ML',
+  
+  // Common abbreviations
+  'prodmgmt': 'Product Management',
+  'prodmgmt.': 'Product Management',
+  'prod mgmt': 'Product Management',
+  'prod. mgmt.': 'Product Management',
+  'data sci.': 'Data Science',
+  'datasci': 'Data Science',
+  'webdev': 'Web Development',
+  'frontend': 'Frontend',
+  'front-end': 'Frontend',
+  'backend': 'Backend',
+  'back-end': 'Backend',
+  'fullstack': 'Full Stack',
+  'full stack': 'Full Stack',
+  'js': 'JavaScript',
+  'ts': 'TypeScript',
+  'py': 'Python',
+  'rb': 'Ruby',
+  'php': 'PHP',
+  'html': 'HTML',
+  'css': 'CSS',
+  'sql': 'SQL',
+  'nosql': 'NoSQL',
+  'api': 'API',
+  'rest': 'REST',
+  'graphql': 'GraphQL',
+  'grpc': 'gRPC',
+  'http': 'HTTP',
+  'https': 'HTTPS',
+  'tcp': 'TCP',
+  'udp': 'UDP',
+  'websocket': 'WebSocket',
+  'webrtc': 'WebRTC',
+  'p2p': 'P2P',
+  'iot': 'IoT',
+  'vr': 'VR',
+  'ar': 'AR',
+  'xr': 'XR',
+  'ui/ux': 'UX/UI',  // Ensure consistent ordering
+  'ml/ai': 'AI/ML',  // Ensure consistent ordering
+};
+
+// Words to keep in lowercase in title case
+const SMALL_WORDS = new Set([
+  'a', 'an', 'and', 'as', 'at', 'but', 'by', 'for', 'if', 'in', 'nor', 'of', 'on',
+  'or', 'the', 'to', 'with', 'vs', 'vs.', 'via'
+]);
+
+// Test the course name correction function
+const testCourseNameCorrection = () => {
+  const testCases = [
+    { input: 'analystics for product manager', expected: 'Analytics for Product Management' },
+    { input: 'cracking pm interview', expected: 'Cracking the PM Interviews' },
+    { input: 'data sci', expected: 'Data Science' },
+    { input: 'ux/ui design', expected: 'UX/UI Design' },
+    { input: 'web dev', expected: 'Web Development' },
+  ];
+
+  testCases.forEach(({ input, expected }) => {
+    const result = formatCourseName(input);
+    console.log(`Test: "${input}"`);
+    console.log(`  Expected: "${expected}"`);
+    console.log(`  Got:      "${result}"`);
+    console.log(`  Pass:     ${result === expected ? '✅' : '❌'}`);
+    console.log('---');
+  });
+};
+
+// Format course name with proper title case and corrections
+const formatCourseName = (name: string): string => {
+  if (!name) return name;
+  
+  // Convert to lowercase and trim
+  let formatted = name.toLowerCase().trim()
+    .replace(/\s+/g, ' ')  // Replace multiple spaces with single space
+    .replace(/\s*\.\s*/g, '. ')  // Normalize spaces around periods
+    .replace(/\s*\/\s*/g, '/')   // Normalize spaces around slashes
+    .replace(/\s*,\s*/g, ', ')   // Normalize spaces around commas
+    .replace(/\.$/, '')           // Remove trailing period
+    .trim();
+  
+  // Apply common corrections - process longer phrases first
+  const sortedCorrections = Object.entries(CORRECTIONS)
+    .sort(([a], [b]) => b.length - a.length); // Longer patterns first
+  
+  for (const [incorrect, correct] of sortedCorrections) {
+    const regex = new RegExp(`\\b${incorrect.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi');
+    formatted = formatted.replace(regex, (match) => 
+      match === match.toLowerCase() ? correct.toLowerCase() :
+      match === match.toUpperCase() ? correct.toUpperCase() :
+      correct.charAt(0).toUpperCase() + correct.slice(1).toLowerCase()
+    );
+  }
+  
+  // Apply title case with special handling for small words and special cases
+  formatted = formatted.replace(/\w[\w'’]*/g, (word, index) => {
+    // Skip small words unless they are the first or last word
+    const lowerWord = word.toLowerCase();
+    if (index > 0 && 
+        index + word.length < formatted.length && 
+        SMALL_WORDS.has(lowerWord)) {
+      return lowerWord;
+    }
+    
+    // Handle words with apostrophes (like "don't")
+    if (word.includes("'")) {
+      return word.split("'").map(part => 
+        part ? part[0].toUpperCase() + part.slice(1).toLowerCase() : ''
+      ).join("'");
+    }
+    
+    // Handle hyphenated words (like "state-of-the-art")
+    if (word.includes("-")) {
+      return word.split("-").map(part => 
+        part ? part[0].toUpperCase() + part.slice(1).toLowerCase() : ''
+      ).join("-");
+    }
+    
+    // Handle special cases like "ai/ml" to "AI/ML" and "ux/ui" to "UX/UI"
+    if (word.includes("/") && word.length <= 10) {
+      // Special handling for UX/UI
+      if (word.toLowerCase().includes('ux/ui') || word.toLowerCase().includes('ui/ux')) {
+        return 'UX/UI';
+      }
+      return word.split("/").map(part => part.toUpperCase()).join("/");
+    }
+    
+    // Default title case
+    return word[0].toUpperCase() + word.slice(1).toLowerCase();
+  });
+  
+  // Final cleanup
+  return formatted
+    .replace(/\s+/g, ' ')     // Ensure single spaces
+    .replace(/\s*\.\s*/g, '. ')  // Normalize spaces around periods
+    .replace(/\s*\/\s*/g, '/')   // Normalize spaces around slashes
+    .replace(/\s*,\s*/g, ', ')   // Normalize spaces around commas
+    .replace(/\.$/, '')           // Remove trailing period
+    .trim();
+};
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -238,6 +403,12 @@ const parseDurationToSeconds = (duration: string): number => {
   return hours * 3600 + minutes * 60 + seconds;
 };
 
+// Test the name correction function when running directly
+if (import.meta.main) {
+  testCourseNameCorrection();
+  Deno.exit(0);
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -245,8 +416,58 @@ serve(async (req) => {
   }
 
   try {
-    const { topic, videos } = await req.json();
-    console.log('Creating course for topic:', topic);
+    const { topic: originalTopic, videos } = await req.json();
+    
+    // Log the original topic for debugging
+    console.log('Original topic:', originalTopic);
+    
+    // Format and correct the course name
+    const formattedTopic = formatCourseName(originalTopic);
+    console.log('Formatted topic:', formattedTopic);
+    
+    // For testing - log the corrections being applied
+    const testCases = [
+      { input: 'analystics for product manager', expected: 'Analytics for Product Management' },
+      { input: 'cracking pm interview', expected: 'Cracking the PM Interviews' },
+      { input: 'data sci', expected: 'Data Science' },
+      { input: 'ux/ui design', expected: 'UX/UI Design' },
+      { input: 'Ux/ui Design', expected: 'UX/UI Design' },
+      { input: 'ui/ux design', expected: 'UX/UI Design' },
+      { input: 'web dev', expected: 'Web Development' },
+      { input: 'ai/ml basics', expected: 'AI/ML Basics' },
+      { input: 'machine learning 101', expected: 'Machine Learning 101' },
+      { input: 'intro to js and react', expected: 'Introduction to JavaScript and React' },
+      { input: 'node.js rest apis', expected: 'Node.js REST APIs' },
+      { input: 'web dev with html, css, and js', expected: 'Web Development With HTML, CSS, and JavaScript' },
+      { input: 'iot with arduino and raspberry pi', expected: 'IoT With Arduino and Raspberry Pi' },
+      { input: 'vr and ar development', expected: 'VR and AR Development' }
+    ];
+    
+    console.log('\n=== Course Name Correction Tests ===');
+    let allPassed = true;
+    
+    testCases.forEach(({ input, expected }, index) => {
+      const result = formatCourseName(input);
+      const passed = result === expected;
+      if (!passed) allPassed = false;
+      
+      console.log(`\nTest ${index + 1}:`);
+      console.log(`  Input:    "${input}"`);
+      console.log(`  Expected: "${expected}"`);
+      console.log(`  Got:      "${result}"`);
+      console.log(`  Status:   ${passed ? '✅ PASS' : '❌ FAIL'}`);
+    });
+    
+    console.log('\n=== Test Summary ===');
+    console.log(`Passed: ${testCases.filter(tc => formatCourseName(tc.input) === tc.expected).length}/${testCases.length}`);
+    console.log(`Status: ${allPassed ? '✅ ALL TESTS PASSED' : '❌ SOME TESTS FAILED'}`);
+    console.log('===================\n');
+    
+    if (!allPassed) {
+      console.log('Note: Some tests failed. Please check the output above for details.');
+    }
+    
+    const topic = formattedTopic; // Use the formatted topic from here on
 
     // Initialize Supabase client
     const supabaseUrl = (globalThis as any).Deno?.env?.get('SUPABASE_URL');
