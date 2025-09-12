@@ -440,7 +440,7 @@ serve(async (req) => {
     // Search with multiple queries
     for (const searchQuery of searchQueries) {
       try {
-        const searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&q=${encodeURIComponent(searchQuery)}&maxResults=15&key=${apiKey}&order=relevance&videoDuration=medium`;
+        const searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&q=${encodeURIComponent(searchQuery)}&maxResults=15&key=${apiKey}&order=relevance&videoDuration=medium&relevanceLanguage=en`;
         
         const searchResponse = await fetch(searchUrl);
         if (!searchResponse.ok) {
