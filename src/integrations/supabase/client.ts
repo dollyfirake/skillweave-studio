@@ -2,16 +2,131 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 
-const SUPABASE_URL = "https://nwrkxjbjxtctydwxxukj.supabase.co";
-const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im53cmt4amJqeHRjdHlkd3h4dWtqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTczMTQ1MDQsImV4cCI6MjA3Mjg5MDUwNH0.kMUfhoQ1xB2R8vJZW-lsAlI22Si_lFtjzl5jlcyBoc0";
+// Environment variables should be used in production
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://nwrkxjbjxtctydwxxukj.supabase.co";
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im53cmt4amJqeHRjdHlkd3h4dWtqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTczMTQ1MDQsImV4cCI6MjA3Mjg5MDUwNH0.kMUfhoQ1xB2R8vJZW-lsAlI22Si_lFtjzl5jlcyBoc0";
 
-// Import the supabase client like this:
-// import { supabase } from "@/integrations/supabase/client";
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+  throw new Error('Missing Supabase environment variables');
+}
 
-export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
-  auth: {
-    storage: localStorage,
-    persistSession: true,
-    autoRefreshToken: true,
+// Create a single supabase client for interacting with your database
+export const supabase = createClient<Database>(
+  SUPABASE_URL,
+  SUPABASE_ANON_KEY,
+  {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+      storage: typeof window !== 'undefined' ? localStorage : undefined,
+    },
   }
-});
+);
+
+// Helper types for common operations
+export type Tables = Database['public']['Tables'];
+export type TableName = keyof Tables;
+export type TableRow<T extends TableName> = Tables[T]['Row'];
+export type TableInsert<T extends TableName> = Tables[T]['Insert'];
+export type TableUpdate<T extends TableName> = Tables[T]['Update'];
+
+// Helper function for type-safe table access
+export const from = <T extends TableName>(table: T) => {
+  return supabase.from(table);
+};
+
+// Helper function for type-safe select queries
+export const select = async <T extends TableName>(
+  table: T,
+  columns?: string,
+  filter?: Record<string, unknown>
+) => {
+  let query = supabase.from(table).select(columns || '*');
+  
+  if (filter) {
+    Object.entries(filter).forEach(([key, value]) => {
+      query = query.eq(key, value);
+    });
+  }
+  
+  const { data, error } = await query;
+  
+  if (error) {
+    console.error(`Error selecting from ${table}:`, error);
+    throw error;
+  }
+  
+  return data as TableRow<T>[];
+};
+
+// Helper function for type-safe single row selection
+export const selectOne = async <T extends TableName>(
+  table: T,
+  columns?: string,
+  filter?: Record<string, unknown>
+) => {
+  const data = await select(table, columns, filter);
+  return data[0] as TableRow<T> | undefined;
+};
+
+// Helper function for type-safe inserts
+export const insert = async <T extends TableName>(
+  table: T,
+  values: TableInsert<T>
+) => {
+  const { data, error } = await supabase
+    .from(table)
+    .insert(values as any)
+    .select();
+    
+  if (error) {
+    console.error(`Error inserting into ${table}:`, error);
+    throw error;
+  }
+  
+  return data as TableRow<T>[];
+};
+
+// Helper function for type-safe updates
+export const update = async <T extends TableName>(
+  table: T,
+  values: TableUpdate<T>,
+  filter: Record<string, unknown>
+) => {
+  let query = supabase.from(table).update(values as any);
+  
+  Object.entries(filter).forEach(([key, value]) => {
+    query = query.eq(key, value);
+  });
+  
+  const { data, error } = await query.select();
+  
+  if (error) {
+    console.error(`Error updating ${table}:`, error);
+    throw error;
+  }
+  
+  return data as TableRow<T>[];
+};
+
+// Helper function for type-safe deletes
+export const remove = async <T extends TableName>(
+  table: T,
+  filter: Record<string, unknown>
+) => {
+  let query = supabase.from(table).delete();
+  
+  Object.entries(filter).forEach(([key, value]) => {
+    query = query.eq(key, value);
+  });
+  
+  const { error } = await query;
+  
+  if (error) {
+    console.error(`Error deleting from ${table}:`, error);
+    throw error;
+  }
+  
+  return true;
+};

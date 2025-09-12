@@ -1,13 +1,16 @@
 import { useState, useEffect, createContext, useContext } from "react";
 import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+import { Database } from "@/types/database.types";
+
+type Profile = Omit<Database['public']['Tables']['profiles']['Insert'], 'user_id' | 'created_at' | 'updated_at'>;
 
 interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
-  signUp: (email: string, password: string) => Promise<{ error: any }>;
+  signUp: (profile: Profile & { password: string }) => Promise<{ error: any }>;
   signInWithGoogle: () => Promise<{ error: any }>;
   signOut: () => Promise<void>;
 }
@@ -63,16 +66,28 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return { error };
   };
 
-  const signUp = async (email: string, password: string) => {
+  const signUp: AuthContextType['signUp'] = async (profile) => {
+    const { email, password, first_name, last_name } = profile;
     const redirectUrl = `${window.location.origin}/`;
-    
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        emailRedirectTo: redirectUrl
+        emailRedirectTo: redirectUrl,
+        data: { first_name, last_name }
       }
     });
+    
+    if (data?.user) {
+      await supabase.from('profiles').upsert({
+        user_id: data.user.id,
+        first_name,
+        last_name,
+        email,
+        updated_at: new Date().toISOString()
+      } as Database['public']['Tables']['profiles']['Insert']);
+    }
+    
     return { error };
   };
 
